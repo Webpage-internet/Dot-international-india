@@ -1224,45 +1224,49 @@
 </footer>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-    // Preloader — animated circular progress
+    // Preloader — animated circular progress (does NOT wait for stall images)
     (function() {
         const circle = document.getElementById('plCircle');
         const label  = document.getElementById('plPercent');
-        const circumference = 2 * Math.PI * 100; // r=100 → ~628.3
+        const circumference = 2 * Math.PI * 100;
         circle.style.strokeDasharray  = circumference;
         circle.style.strokeDashoffset = circumference;
 
         let pct = 0;
         let done = false;
-        // Accelerates quickly then eases near 90, waits for real load to reach 100
+
         const fake = setInterval(() => {
-            if (pct < 88) pct += Math.random() * 2.5 + 0.5;
-            else if (pct < 92) pct += 0.12;
-            pct = Math.min(pct, 92);
+            if (pct < 85) pct += Math.random() * 3.5 + 1;
+            else if (pct < 94) pct += 0.3;
+            pct = Math.min(pct, 94);
             const offset = circumference - (pct / 100) * circumference;
             circle.style.strokeDashoffset = offset;
             label.textContent = Math.floor(pct) + '%';
-        }, 18);
+        }, 16);
 
         function finish() {
             if (done) return; done = true;
             clearInterval(fake);
             let p = pct;
             const fin = setInterval(() => {
-                p = Math.min(p + 1.5, 100);
+                p = Math.min(p + 2, 100);
                 circle.style.strokeDashoffset = circumference - (p / 100) * circumference;
                 label.textContent = Math.floor(p) + '%';
                 if (p >= 100) {
                     clearInterval(fin);
                     label.textContent = '100%';
-                    setTimeout(() => document.getElementById('preloader').classList.add('hide'), 500);
+                    setTimeout(() => document.getElementById('preloader').classList.add('hide'), 380);
                 }
-            }, 12);
+            }, 10);
         }
 
-        window.addEventListener('load', finish);
-        // Safety fallback
-        setTimeout(finish, 4000);
+        // Hide as soon as DOM + fonts are ready — don't wait for stall images
+        if (document.readyState === 'complete') { finish(); }
+        else {
+            window.addEventListener('load', finish);
+            // Fast fallback: hide after 2.5s max regardless
+            setTimeout(finish, 2500);
+        }
     })();
 
     // Custom Cursor
@@ -1361,82 +1365,142 @@
         setTimeout(() => { btn.textContent = 'Send Message ✈'; btn.style.background = ''; }, 3200);
     }
 
-    // ── STALL SCROLL SEQUENCE ──
+    // ── STALL SCROLL SEQUENCE — smart on-demand loader ──
     (function() {
         const TOTAL_FRAMES = 242;
         const FOLDER = 'https://webpage-internet.github.io/Dot-international-india/stall/';
-        const canvas = document.getElementById('stallCanvas');
-        const ctx = canvas.getContext('2d');
+        const AHEAD = 25;        // frames to preload ahead of current
+        const BEHIND = 8;        // frames to keep behind current
+        const CONCURRENCY = 6;   // parallel fetches at once
+
+        const canvas  = document.getElementById('stallCanvas');
+        const ctx     = canvas.getContext('2d');
         const section = document.getElementById('stall-sequence');
         const progressBar = document.getElementById('stall-progress-bar');
-        const stallText = document.getElementById('stall-text');
+        const stallText   = document.getElementById('stall-text');
 
-        // Pad frame number to 5 digits with stall_ prefix: 0 -> "stall_00000"
+        const images  = new Array(TOTAL_FRAMES).fill(null);
+        const loading = new Set();
+        let currentFrame = 0;
+        let sectionVisible = false;
+        let rafPending = false;
+        let lastProgress = -1;
+
+        // ── Helpers ──
         function framePath(n) {
             return FOLDER + 'stall_' + String(n).padStart(5, '0') + '.jpg';
         }
 
-        // Preload all images
-        const images = new Array(TOTAL_FRAMES);
-        let loadedCount = 0;
-        let ready = false;
-
         function resizeCanvas() {
-            canvas.width = window.innerWidth;
+            canvas.width  = window.innerWidth;
             canvas.height = window.innerHeight;
             drawFrame(currentFrame);
         }
 
-        let currentFrame = 0;
-
         function drawFrame(index) {
             const img = images[index];
             if (!img || !img.complete || !img.naturalWidth) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Cover-fit the image
             const cw = canvas.width, ch = canvas.height;
             const iw = img.naturalWidth, ih = img.naturalHeight;
             const scale = Math.max(cw / iw, ch / ih);
             const dw = iw * scale, dh = ih * scale;
-            const dx = (cw - dw) / 2, dy = (ch - dh) / 2;
-            ctx.drawImage(img, dx, dy, dw, dh);
+            ctx.clearRect(0, 0, cw, ch);
+            ctx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
         }
 
-        function onScroll() {
-            const rect = section.getBoundingClientRect();
-            const sectionH = section.offsetHeight;
-            const viewH = window.innerHeight;
-            // progress: 0 when section enters, 1 when section exits
-            const scrolled = -rect.top;
-            const scrollable = sectionH - viewH;
-            const progress = Math.max(0, Math.min(1, scrolled / scrollable));
-
-            // Frame index: play forward on scroll down, reverse on scroll up
-            const frameIndex = Math.min(TOTAL_FRAMES - 1, Math.floor(progress * (TOTAL_FRAMES - 1)));
-
-            if (frameIndex !== currentFrame) {
-                currentFrame = frameIndex;
-                drawFrame(currentFrame);
+        // ── Demand loader — only fetches what's needed now ──
+        function demandLoad(target) {
+            let queued = 0;
+            // Priority: target frame first, then ahead, then behind
+            const order = [target];
+            for (let d = 1; d <= Math.max(AHEAD, BEHIND); d++) {
+                if (d <= AHEAD  && target + d < TOTAL_FRAMES) order.push(target + d);
+                if (d <= BEHIND && target - d >= 0)           order.push(target - d);
             }
-
-            // Progress bar
-            progressBar.style.width = (progress * 100) + '%';
-
-            // Show text when sequence is between 5% and 80%
-            if (progress > 0.05 && progress < 0.8) {
-                stallText.classList.add('visible');
-            } else {
-                stallText.classList.remove('visible');
-            }
-        }
-
-        // Load images in batches for performance
-        function loadImages() {
-            for (let i = 0; i < TOTAL_FRAMES; i++) {
+            for (const i of order) {
+                if (queued >= CONCURRENCY) break;
+                if (images[i] || loading.has(i)) continue;
+                loading.add(i);
+                queued++;
                 const img = new Image();
-                img.src = framePath(i); // files start at stall_00000
                 img.onload = () => {
-                    loadedCount++;
-                    if (loadedCount === 1) {
-                        // Draw first frame as soon as it's ready
+                    images[i] = img;
+                    loading.delete(i);
+                    // If this is the frame we need right now, draw it
+                    if (i === currentFrame) drawFrame(i);
+                    // Else find closest loaded frame near current to avoid blank canvas
+                    else if (!images[currentFrame]) {
+                        for (let d = 1; d <= 30; d++) {
+                            if (images[currentFrame - d]) { drawFrame(currentFrame - d); break; }
+                            if (images[currentFrame + d]) { drawFrame(currentFrame + d); break; }
+                        }
+                    }
+                };
+                img.onerror = () => loading.delete(i);
+                img.src = framePath(i);
+            }
+        }
+
+        // ── Free memory for frames far away ──
+        function evictFarFrames(target) {
+            for (let i = 0; i < TOTAL_FRAMES; i++) {
+                if (images[i] && Math.abs(i - target) > AHEAD + BEHIND + 20) {
+                    images[i] = null;
+                }
+            }
+        }
+
+        // ── Scroll handler (throttled via rAF) ──
+        function onScroll() {
+            if (!sectionVisible || rafPending) return;
+            rafPending = true;
+            requestAnimationFrame(() => {
+                rafPending = false;
+                const rect      = section.getBoundingClientRect();
+                const sectionH  = section.offsetHeight;
+                const viewH     = window.innerHeight;
+                const scrolled  = -rect.top;
+                const scrollable = sectionH - viewH;
+                const progress  = Math.max(0, Math.min(1, scrolled / scrollable));
+
+                if (Math.abs(progress - lastProgress) < 0.001) return;
+                lastProgress = progress;
+
+                const frameIndex = Math.min(TOTAL_FRAMES - 1, Math.floor(progress * (TOTAL_FRAMES - 1)));
+
+                if (frameIndex !== currentFrame) {
+                    currentFrame = frameIndex;
+                    drawFrame(currentFrame);
+                    demandLoad(currentFrame);
+                    evictFarFrames(currentFrame);
+                }
+
+                progressBar.style.width = (progress * 100) + '%';
+                if (progress > 0.05 && progress < 0.8) stallText.classList.add('visible');
+                else stallText.classList.remove('visible');
+            });
+        }
+
+        // ── Only start loading when section is near viewport ──
+        const sectionObserver = new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                sectionVisible = e.isIntersecting;
+                if (sectionVisible) demandLoad(currentFrame);
+            });
+        }, { rootMargin: '200px' });
+        sectionObserver.observe(section);
+
+        // ── Init ──
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('scroll', onScroll, { passive: true });
+
+        // Pre-seed just the first frame so canvas isn't blank on arrival
+        (function seedFirst() {
+            const img = new Image();
+            loading.add(0);
+            img.onload = () => { images[0] = img; loading.delete(0); drawFrame(0); };
+            img.onerror = () => loading.delete(0);
+            img.src = framePath(0);
+        })();
         
