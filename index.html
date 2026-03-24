@@ -65,9 +65,8 @@
             z-index: 10000; transition: opacity 1s cubic-bezier(0.77,0,0.18,1), visibility 1s;
             overflow: hidden;
         }
-        #preloader.hide { opacity: 0; visibility: hidden; pointer-events: none; }
-        #preloader.hide .pl-ring-wrap { transform: scale(1.15); }
-        #preloader.hide .pl-inner { opacity: 0; transform: translateY(-30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+        #preloader.hide { opacity: 0; pointer-events: none; }
+        #preloader.gone { display: none; }
 
         /* Preloader animated background */
         .pl-bg-grid {
@@ -814,6 +813,34 @@
     </div>
 </div>
 
+<script>
+// Preloader — standalone, fires immediately, no dependencies
+(function() {
+    function hideLoader() {
+        var el = document.getElementById('preloader');
+        if (!el) return;
+        el.style.transition = 'opacity 0.6s ease';
+        el.style.opacity = '0';
+        setTimeout(function() { el.style.display = 'none'; }, 700);
+    }
+
+    var circle = document.getElementById('plCircle');
+    var label  = document.getElementById('plPercent');
+    var circ   = 628.3;
+    if (circle) { circle.style.strokeDasharray = circ; circle.style.strokeDashoffset = circ; }
+
+    var pct = 0;
+    var iv = setInterval(function() {
+        pct = Math.min(pct + 1, 100);
+        if (circle) circle.style.strokeDashoffset = circ - (pct / 100) * circ;
+        if (label)  label.textContent = pct + '%';
+        if (pct >= 100) clearInterval(iv);
+    }, 30);
+
+    setTimeout(hideLoader, 3000);
+})();
+</script>
+
 <!-- Custom Cursor -->
 <div class="cur-dot" id="curDot"></div>
 <div class="cur-ring" id="curRing"></div>
@@ -1224,32 +1251,6 @@
 </footer>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-    // Preloader — show for 3 seconds then hide
-    (function() {
-        const circle = document.getElementById('plCircle');
-        const label  = document.getElementById('plPercent');
-        const circumference = 2 * Math.PI * 100;
-        circle.style.strokeDasharray  = circumference;
-        circle.style.strokeDashoffset = circumference;
-
-        let pct = 0;
-        const duration = 3000; // 3 seconds total
-        const interval = 30;
-        const steps = duration / interval;
-        let step = 0;
-
-        const timer = setInterval(() => {
-            step++;
-            pct = Math.min(100, Math.floor((step / steps) * 100));
-            circle.style.strokeDashoffset = circumference - (pct / 100) * circumference;
-            label.textContent = pct + '%';
-            if (pct >= 100) {
-                clearInterval(timer);
-                setTimeout(() => document.getElementById('preloader').classList.add('hide'), 300);
-            }
-        }, interval);
-    })();
-
     // Custom Cursor
     const dot = document.getElementById('curDot');
     const ring = document.getElementById('curRing');
