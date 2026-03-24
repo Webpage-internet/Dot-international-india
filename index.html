@@ -1224,7 +1224,7 @@
 </footer>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-    // Preloader — animated circular progress (does NOT wait for stall images)
+    // Preloader — show for 3 seconds then hide
     (function() {
         const circle = document.getElementById('plCircle');
         const label  = document.getElementById('plPercent');
@@ -1233,40 +1233,21 @@
         circle.style.strokeDashoffset = circumference;
 
         let pct = 0;
-        let done = false;
+        const duration = 3000; // 3 seconds total
+        const interval = 30;
+        const steps = duration / interval;
+        let step = 0;
 
-        const fake = setInterval(() => {
-            if (pct < 85) pct += Math.random() * 3.5 + 1;
-            else if (pct < 94) pct += 0.3;
-            pct = Math.min(pct, 94);
-            const offset = circumference - (pct / 100) * circumference;
-            circle.style.strokeDashoffset = offset;
-            label.textContent = Math.floor(pct) + '%';
-        }, 16);
-
-        function finish() {
-            if (done) return; done = true;
-            clearInterval(fake);
-            let p = pct;
-            const fin = setInterval(() => {
-                p = Math.min(p + 2, 100);
-                circle.style.strokeDashoffset = circumference - (p / 100) * circumference;
-                label.textContent = Math.floor(p) + '%';
-                if (p >= 100) {
-                    clearInterval(fin);
-                    label.textContent = '100%';
-                    setTimeout(() => document.getElementById('preloader').classList.add('hide'), 380);
-                }
-            }, 10);
-        }
-
-        // Hide as soon as DOM + fonts are ready — don't wait for stall images
-        if (document.readyState === 'complete') { finish(); }
-        else {
-            window.addEventListener('load', finish);
-            // Fast fallback: hide after 2.5s max regardless
-            setTimeout(finish, 2500);
-        }
+        const timer = setInterval(() => {
+            step++;
+            pct = Math.min(100, Math.floor((step / steps) * 100));
+            circle.style.strokeDashoffset = circumference - (pct / 100) * circumference;
+            label.textContent = pct + '%';
+            if (pct >= 100) {
+                clearInterval(timer);
+                setTimeout(() => document.getElementById('preloader').classList.add('hide'), 300);
+            }
+        }, interval);
     })();
 
     // Custom Cursor
