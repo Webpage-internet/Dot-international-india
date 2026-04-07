@@ -301,8 +301,8 @@
             transition: var(--trans);
             display: block;
             box-shadow: var(--shadow);
-            object-fit: cover;
             aspect-ratio: 16/9; /* PERFECT 1920x1080 RATIO */
+            object-fit: cover;
         }
         .about-img-wrap:hover .about-img { transform: scale(1.02); }
         
@@ -429,7 +429,7 @@
         .gallery-item:hover .gallery-overlay { opacity: 1; }
         .gallery-overlay::before {
             content: '+'; position: absolute; top: 50%; left: 50%;
-            margin-top: -20px; margin-left: -15px; /* Center the plus icon */
+            margin-top: -20px; margin-left: -15px;
             font-size: 3rem; font-weight: 300; color: var(--accent);
             opacity: 0; transform: scale(0.5) rotate(-90deg);
             transition: opacity 0.3s, transform 0.4s;
@@ -440,7 +440,7 @@
         #lightbox {
             position: fixed; inset: 0; background: rgba(2,4,10,0.96);
             display: flex; align-items: center; justify-content: center;
-            z-index: 100000; /* FIXED: Now above the cursor logic, but cursor is forced visible */
+            z-index: 100000; /* FIXED: Layered properly but cursor forces visible */
             opacity: 0; pointer-events: none;
             transition: opacity 0.35s; backdrop-filter: blur(8px);
             cursor: none; /* Make sure default cursor stays hidden */
@@ -479,7 +479,7 @@
         .dyn-gallery-item:hover .gallery-overlay { opacity: 1; }
         .dyn-gallery-item .gallery-overlay::before {
             content: '+'; position: absolute; top: 50%; left: 50%;
-            margin-top: -25px; margin-left: -15px; /* Centers the icon perfectly */
+            margin-top: -25px; margin-left: -15px; 
             font-size: 3.5rem; font-weight: 300; color: var(--accent);
             opacity: 0; transform: scale(0.5) rotate(-90deg);
             transition: opacity 0.3s, transform 0.4s;
@@ -1228,7 +1228,6 @@
 
 <script>
     // ── FORCED VIDEO PLAYBACK SCRIPT ── 
-    // Prevents browsers from auto-pausing the background video
     document.addEventListener("DOMContentLoaded", function() {
         var videos = document.querySelectorAll("video");
         videos.forEach(function(video) {
@@ -1238,7 +1237,7 @@
         });
     });
 
-    // ── DYNAMIC IMAGE GALLERY (OPTIMIZED BATCH LOADING) ──
+    // ── DYNAMIC IMAGE GALLERY ──
     (function(){
         var MAX    = 500;
         var FOLDER = './dot image/';
@@ -1322,7 +1321,7 @@
 
         // BATCH LOADING (Prevents the site from freezing)
         var currentProbe = 1;
-        var batchSize = 10; // Only check 10 images at a time
+        var batchSize = 10; 
         
         function probeNextBatch() {
             var end = Math.min(currentProbe + batchSize - 1, MAX);
@@ -1331,7 +1330,7 @@
             }
             currentProbe += batchSize;
             if (currentProbe <= MAX) {
-                setTimeout(probeNextBatch, 25); // Gives the browser 25ms to "breathe"
+                setTimeout(probeNextBatch, 25); 
             }
         }
         probeNextBatch();
@@ -1508,11 +1507,10 @@
         });
     }
 
+    // ── STALL SCROLL SEQUENCE (SMOOTH FALLBACK ENGINE) ──
     (function(){
         var TOTAL  = 242;
         var FOLDER = 'https://webpage-internet.github.io/Dot-international-india/stall/';
-        var AHEAD  = 20, BEHIND = 8, CONC = 6;
-
         var canvas  = document.getElementById('stallCanvas');
         var ctx     = canvas.getContext('2d');
         var section = document.getElementById('stall-sequence');
@@ -1520,7 +1518,6 @@
         var txt     = document.getElementById('stall-text');
 
         var images  = new Array(TOTAL).fill(null);
-        var loading = {};
         var cur     = 0, raf = false, visible = false;
 
         function path(n){ return FOLDER + 'stall_' + String(n).padStart(5,'0') + '.jpg'; }
@@ -1531,34 +1528,53 @@
             draw(cur);
         }
 
+        // SMART FALLBACK: If current frame isn't loaded, find the closest one that IS.
+        function getClosestLoaded(target) {
+            if (images[target] && images[target].complete && images[target].naturalWidth) return target;
+            for (var offset = 1; offset < TOTAL; offset++) {
+                if (target - offset >= 0 && images[target - offset] && images[target - offset].complete && images[target - offset].naturalWidth) return target - offset;
+                if (target + offset < TOTAL && images[target + offset] && images[target + offset].complete && images[target + offset].naturalWidth) return target + offset;
+            }
+            return -1; // Nothing loaded at all yet
+        }
+
         function draw(i){
-            var img = images[i];
-            if(!img || !img.complete || !img.naturalWidth) return;
+            var idx = getClosestLoaded(i);
+            if (idx === -1) return; // Wait for at least 1 frame to load
+            
+            var img = images[idx];
             var cw=canvas.width, ch=canvas.height, iw=img.naturalWidth, ih=img.naturalHeight;
             var s=Math.max(cw/iw,ch/ih), dw=iw*s, dh=ih*s;
             ctx.clearRect(0,0,cw,ch);
             ctx.drawImage(img,(cw-dw)/2,(ch-dh)/2,dw,dh);
         }
 
-        function load(target){
-            var order=[target];
-            for(var d=1;d<=Math.max(AHEAD,BEHIND);d++){
-                if(d<=AHEAD  && target+d<TOTAL)  order.push(target+d);
-                if(d<=BEHIND && target-d>=0)      order.push(target-d);
+        // AGGRESSIVE BACKGROUND LOADER
+        function preloadAll() {
+            var current = 0;
+            function loadBatch() {
+                var loadedThisBatch = 0;
+                var batchLimit = Math.min(current + 4, TOTAL); // Load 4 at a time
+                
+                for (var k = current; k < batchLimit; k++) {
+                    (function(index) {
+                        var img = new Image();
+                        img.onload = img.onerror = function() {
+                            images[index] = img;
+                            loadedThisBatch++;
+                            if (index === 0) draw(0); 
+                            if (loadedThisBatch === (batchLimit - current)) {
+                                current += 4;
+                                if (current < TOTAL) {
+                                    loadBatch();
+                                }
+                            }
+                        };
+                        img.src = path(index);
+                    })(k);
+                }
             }
-            var q=0;
-            for(var k=0;k<order.length;k++){
-                if(q>=CONC) break;
-                var i=order[k];
-                if(images[i]||loading[i]) continue;
-                loading[i]=true; q++;
-                (function(idx){
-                    var img=new Image();
-                    img.onload=function(){ images[idx]=img; delete loading[idx]; if(idx===cur) draw(idx); };
-                    img.onerror=function(){ delete loading[idx]; };
-                    img.src=path(idx);
-                })(i);
-            }
+            loadBatch();
         }
 
         function onScroll(){
@@ -1569,18 +1585,24 @@
                 var rect=section.getBoundingClientRect();
                 var prog=Math.max(0,Math.min(1,-rect.top/(section.offsetHeight-window.innerHeight)));
                 var fi=Math.min(TOTAL-1,Math.floor(prog*(TOTAL-1)));
-                if(fi!==cur){ cur=fi; draw(cur); load(cur); }
+                if(fi!==cur){ 
+                    cur=fi; 
+                    draw(cur); 
+                }
                 bar.style.width=(prog*100)+'%';
                 if(prog>0.05&&prog<0.8) txt.classList.add('visible');
                 else txt.classList.remove('visible');
             });
         }
 
-        var obs=new IntersectionObserver(function(e){ e.forEach(function(en){ visible=en.isIntersecting; if(visible) load(cur); }); },{rootMargin:'200px'});
+        var obs=new IntersectionObserver(function(e){ e.forEach(function(en){ visible=en.isIntersecting; }); },{rootMargin:'200px'});
         obs.observe(section);
         window.addEventListener('scroll', onScroll, {passive:true});
         window.addEventListener('resize', resize);
         resize();
+        
+        // Start preloading after 0.5s so it doesn't slow down the rest of your website
+        setTimeout(preloadAll, 500);
     })();
 </script>
 </body>
