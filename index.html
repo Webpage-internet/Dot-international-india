@@ -172,7 +172,7 @@
         }
         .nav-links a:hover::after { width: 100%; }
         .nav-cta { margin-left: 10px; }
-        .mobile-toggle { display: none; font-size: 1.4rem; color: #fff; background: none; border: none; cursor: pointer; z-index: 1001; }
+        .mobile-toggle { display: none; font-size: 1.4rem; color: #fff; background: none; border: none; cursor: none; z-index: 1001; }
 
         /* ── HERO ── */
         .hero {
@@ -1237,51 +1237,50 @@
         });
     });
 
-    // ── DYNAMIC IMAGE GALLERY ──
+    // ── DYNAMIC IMAGE GALLERY (SMART SEQUENTIAL LOADER) ──
     (function(){
-        var MAX    = 500;
         var FOLDER = './dot image/';
         var EXTS   = ['jpg', 'jpeg', 'png', 'webp', 'JPG', 'JPEG', 'PNG'];
         var grid   = document.getElementById('dynGalleryGrid');
         var empty  = document.getElementById('dyn-gallery-empty');
         var loadEl = document.getElementById('dyn-gallery-loading');
 
-        var found  = 0;
-        var done   = 0;
         var results = []; 
+        var currentIndex = 1;
 
         loadEl.style.display = 'block';
 
-        function tryLoad(n) {
-            var tried = 0;
-            var exts = EXTS.slice();
+        function loadNextImage() {
+            var extIndex = 0;
 
-            function tryNext() {
-                if (tried >= exts.length) {
-                    checkDone();
+            function tryExtension() {
+                if (extIndex >= EXTS.length) {
+                    // We tried all extensions and got an error.
+                    // This means we have hit the end of the user's images.
+                    // Stop searching completely! This prevents the GitHub block.
+                    finalize();
                     return;
                 }
-                var ext = exts[tried++];
-                var src = FOLDER + n + '.' + ext;
+                var ext = EXTS[extIndex++];
+                var src = FOLDER + currentIndex + '.' + ext;
                 var img = new Image();
+                
                 img.onload = function() {
-                    results.push({ index: n, src: src });
-                    found++;
-                    checkDone();
+                    // Success! Save it, and check the very next number.
+                    results.push({ index: currentIndex, src: src });
+                    currentIndex++;
+                    loadNextImage();
                 };
+                
                 img.onerror = function() {
-                    tryNext();
+                    // Failed. Try the next file extension.
+                    tryExtension();
                 };
+                
                 img.src = src;
             }
-            tryNext();
-        }
-
-        function checkDone() {
-            done++;
-            if (done >= MAX) {
-                finalize();
-            }
+            
+            tryExtension();
         }
 
         function finalize() {
@@ -1291,8 +1290,6 @@
                 empty.style.display = 'block';
                 return;
             }
-
-            results.sort(function(a, b){ return a.index - b.index; });
 
             results.forEach(function(item, i) {
                 var div = document.createElement('div');
@@ -1319,20 +1316,8 @@
             });
         }
 
-        var currentProbe = 1;
-        var batchSize = 10; 
-        
-        function probeNextBatch() {
-            var end = Math.min(currentProbe + batchSize - 1, MAX);
-            for (var i = currentProbe; i <= end; i++) {
-                tryLoad(i);
-            }
-            currentProbe += batchSize;
-            if (currentProbe <= MAX) {
-                setTimeout(probeNextBatch, 25); 
-            }
-        }
-        probeNextBatch();
+        // Start checking at image 1
+        loadNextImage();
 
         window.openDynLB = function(src) {
             document.getElementById('lb-img').src = src;
@@ -1506,7 +1491,7 @@
         });
     }
 
-    // ── STALL SCROLL SEQUENCE (BUTTERY SMOOTH ENGINE) ──
+    // ── STALL SCROLL SEQUENCE (SILENT BACKGROUND WORKER) ──
     (function(){
         var TOTAL  = 242;
         var FOLDER = 'https://webpage-internet.github.io/Dot-international-india/stall/';
@@ -1529,7 +1514,6 @@
             draw(cur);
         }
 
-        // SMART FALLBACK: If current frame isn't loaded, find the closest one that IS.
         function getClosestLoaded(target) {
             if (loaded[target]) return target;
             for (var offset = 1; offset < TOTAL; offset++) {
@@ -1556,7 +1540,7 @@
         // SILENT BACKGROUND LOADER
         function startPreload() {
             var indexToLoad = 0;
-            var concurrent = 4; // Safely load 4 at a time
+            var concurrent = 4; // Safely load 4 at a time to prevent blocking
             var active = 0;
 
             function loadNext() {
@@ -1575,7 +1559,7 @@
                             }
                         }
                         active--;
-                        loadNext();
+                        setTimeout(loadNext, 10); // Tiny pause to keep the browser happy
                     };
                     img.src = path(idx);
                 }
@@ -1608,7 +1592,6 @@
         window.addEventListener('resize', resize);
         resize();
         
-        // Start loading sequence images the moment the site opens
         startPreload();
     })();
 </script>
