@@ -1506,7 +1506,7 @@
         });
     }
 
-    // ── STALL SCROLL SEQUENCE (SMART PRIORITY QUEUE) ──
+    // ── STALL SCROLL SEQUENCE (BUTTERY SMOOTH ENGINE) ──
     (function(){
         var TOTAL  = 242;
         var FOLDER = 'https://webpage-internet.github.io/Dot-international-india/stall/';
@@ -1517,7 +1517,9 @@
         var txt     = document.getElementById('stall-text');
 
         var images  = new Array(TOTAL).fill(null);
-        var cur     = 0, raf = false, visible = false;
+        var loaded  = new Array(TOTAL).fill(false);
+        var cur     = 0;
+        var raf     = false;
 
         function path(n){ return FOLDER + 'stall_' + String(n).padStart(5,'0') + '.jpg'; }
 
@@ -1529,10 +1531,10 @@
 
         // SMART FALLBACK: If current frame isn't loaded, find the closest one that IS.
         function getClosestLoaded(target) {
-            if (images[target] && images[target].complete) return target;
+            if (loaded[target]) return target;
             for (var offset = 1; offset < TOTAL; offset++) {
-                if (target - offset >= 0 && images[target - offset] && images[target - offset].complete) return target - offset;
-                if (target + offset < TOTAL && images[target + offset] && images[target + offset].complete) return target + offset;
+                if (target - offset >= 0 && loaded[target - offset]) return target - offset;
+                if (target + offset < TOTAL && loaded[target + offset]) return target + offset;
             }
             return -1; 
         }
@@ -1542,95 +1544,72 @@
             if (idx === -1) return; 
             
             var img = images[idx];
-            var cw=canvas.width, ch=canvas.height, iw=img.naturalWidth, ih=img.naturalHeight;
+            var cw = canvas.width, ch = canvas.height;
+            var iw = img.naturalWidth, ih = img.naturalHeight;
             if(!iw || !ih) return; 
 
-            var s=Math.max(cw/iw,ch/ih), dw=iw*s, dh=ih*s;
-            ctx.clearRect(0,0,cw,ch);
-            ctx.drawImage(img,(cw-dw)/2,(ch-dh)/2,dw,dh);
+            var s = Math.max(cw/iw, ch/ih), dw = iw*s, dh = ih*s;
+            ctx.clearRect(0, 0, cw, ch);
+            ctx.drawImage(img, (cw-dw)/2, (ch-dh)/2, dw, dh);
         }
 
-        // SMART PRIORITY QUEUE ENGINE
-        var preloaded = new Array(TOTAL).fill(false);
-        var activeLoads = 0;
-        var maxConcurrent = 6; 
-        
-        function preloadImages() {
-            var loadQueue = [];
-            
-            // Priority 1: Current frame and the next 20 frames
-            for (var i = cur; i < Math.min(cur + 20, TOTAL); i++) {
-                if (!preloaded[i]) loadQueue.push(i);
-            }
-            // Priority 2: Previous 10 frames
-            for (var i = Math.max(cur - 10, 0); i < cur; i++) {
-                if (!preloaded[i] && !loadQueue.includes(i)) loadQueue.push(i);
-            }
-            // Priority 3: All remaining frames
-            for (var i = 0; i < TOTAL; i++) {
-                if (!preloaded[i] && !loadQueue.includes(i)) loadQueue.push(i);
-            }
+        // SILENT BACKGROUND LOADER
+        function startPreload() {
+            var indexToLoad = 0;
+            var concurrent = 4; // Safely load 4 at a time
+            var active = 0;
 
-            function processQueue() {
-                while (activeLoads < maxConcurrent && loadQueue.length > 0) {
-                    var idx = loadQueue.shift();
-                    if (preloaded[idx]) continue;
-                    
-                    preloaded[idx] = true;
-                    activeLoads++;
-                    
-                    var img = new Image();
-                    img.onload = img.onerror = (function(index, imageElement) {
-                        return function() {
-                            activeLoads--;
-                            if (imageElement.type !== 'error') {
-                                images[index] = imageElement;
-                                // If this newly loaded image is close to where we are looking, draw it to clear any blur/fallback
-                                if (Math.abs(cur - index) <= 2) draw(cur);
+            function loadNext() {
+                if (indexToLoad >= TOTAL) return;
+                while (active < concurrent && indexToLoad < TOTAL) {
+                    let idx = indexToLoad++;
+                    active++;
+                    let img = new Image();
+                    img.onload = img.onerror = function() {
+                        if (img.type !== 'error') {
+                            images[idx] = img;
+                            loaded[idx] = true;
+                            // Update canvas immediately if this frame is currently needed
+                            if (Math.abs(cur - idx) <= 2) {
+                                draw(cur);
                             }
-                            processQueue(); 
-                        };
-                    })(idx, img);
-                    
+                        }
+                        active--;
+                        loadNext();
+                    };
                     img.src = path(idx);
                 }
             }
-            processQueue();
+            loadNext();
         }
 
         function onScroll(){
-            if(!visible||raf) return;
-            raf=true;
+            if(raf) return;
+            raf = true;
             requestAnimationFrame(function(){
-                raf=false;
-                var rect=section.getBoundingClientRect();
-                var prog=Math.max(0,Math.min(1,-rect.top/(section.offsetHeight-window.innerHeight)));
-                var fi=Math.min(TOTAL-1,Math.floor(prog*(TOTAL-1)));
-                if(fi!==cur){ 
-                    cur=fi; 
+                var rect = section.getBoundingClientRect();
+                var prog = Math.max(0, Math.min(1, -rect.top / (section.offsetHeight - window.innerHeight)));
+                var fi = Math.min(TOTAL - 1, Math.floor(prog * (TOTAL - 1)));
+                
+                if(fi !== cur){ 
+                    cur = fi; 
                     draw(cur); 
-                    preloadImages(); // Readjusts loading priority based on where user scrolled
                 }
-                bar.style.width=(prog*100)+'%';
-                if(prog>0.05&&prog<0.8) txt.classList.add('visible');
+                
+                bar.style.width = (prog * 100) + '%';
+                if(prog > 0.05 && prog < 0.8) txt.classList.add('visible');
                 else txt.classList.remove('visible');
+                
+                raf = false;
             });
         }
 
-        var obs=new IntersectionObserver(function(e){ 
-            e.forEach(function(en){ 
-                visible=en.isIntersecting; 
-                if(visible) preloadImages(); 
-            }); 
-        },{rootMargin:'200px'});
-        obs.observe(section);
-        
         window.addEventListener('scroll', onScroll, {passive:true});
         window.addEventListener('resize', resize);
         resize();
         
-        // Kick off loading a split second after the site opens
-        setTimeout(preloadImages, 100);
+        // Start loading sequence images the moment the site opens
+        startPreload();
     })();
 </script>
 </body>
