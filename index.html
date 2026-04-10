@@ -259,8 +259,7 @@
         /* ── LOGO IMAGE ── */
         .logo-img-wrap { display: flex; align-items: center; }
         .nav-logo-img {
-            height: 120px; /* ENLARGED LOGO */
-            width: auto; display: block;
+            height: 80px; width: auto; display: block;
             filter: brightness(1.1);
             transition: opacity 0.3s, transform 0.3s;
         }
@@ -312,7 +311,7 @@
             background: rgba(4, 8, 18, 0.85); 
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(94, 186, 163, 0.4);
+            border: 1px solid rgba(94,186,163,0.4);
             border-radius: 16px;
             padding: 22px 30px;
             display: flex; align-items: center; gap: 15px;
@@ -507,7 +506,7 @@
             border-radius: var(--radius); padding: 38px 24px;
             text-align: center; transition: var(--trans); position: relative;
         }
-        .feat-card:hover { transform: translateY(-10px); background: var(--surface-hover); border-color: rgba(94, 186, 163, 0.3); }
+        .feat-card:hover { transform: translateY(-10px); background: var(--surface-hover); border-color: rgba(94,186,163,0.3); }
         .feat-icon {
             width: 68px; height: 68px; margin: 0 auto 22px;
             border-radius: 50%; background: rgba(94,186,163,0.08); border: var(--border);
@@ -730,7 +729,7 @@
         }
         #stall-progress-bar {
             height: 100%; width: 0%; background: var(--grad);
-            border-radius: 2px; transition: width(0.05s linear);
+            border-radius: 2px; transition: width 0.05s linear;
         }
         @media (max-width: 768px) {
             #stall-sequence { height: 500vh; }
@@ -1256,6 +1255,9 @@
 
             function tryExtension() {
                 if (extIndex >= EXTS.length) {
+                    // We tried all extensions and got an error.
+                    // This means we have hit the end of the user's images.
+                    // Stop searching completely! This prevents the GitHub block.
                     finalize();
                     return;
                 }
@@ -1264,12 +1266,14 @@
                 var img = new Image();
                 
                 img.onload = function() {
+                    // Success! Save it, and check the very next number.
                     results.push({ index: currentIndex, src: src });
                     currentIndex++;
                     loadNextImage();
                 };
                 
                 img.onerror = function() {
+                    // Failed. Try the next file extension.
                     tryExtension();
                 };
                 
@@ -1312,6 +1316,7 @@
             });
         }
 
+        // Start checking at image 1
         loadNextImage();
 
         window.openDynLB = function(src) {
@@ -1532,9 +1537,10 @@
             ctx.drawImage(img, (cw-dw)/2, (ch-dh)/2, dw, dh);
         }
 
+        // SILENT BACKGROUND LOADER
         function startPreload() {
             var indexToLoad = 0;
-            var concurrent = 4; 
+            var concurrent = 4; // Safely load 4 at a time to prevent blocking
             var active = 0;
 
             function loadNext() {
@@ -1547,12 +1553,13 @@
                         if (img.type !== 'error') {
                             images[idx] = img;
                             loaded[idx] = true;
+                            // Update canvas immediately if this frame is currently needed
                             if (Math.abs(cur - idx) <= 2) {
                                 draw(cur);
                             }
                         }
                         active--;
-                        setTimeout(loadNext, 10); 
+                        setTimeout(loadNext, 10); // Tiny pause to keep the browser happy
                     };
                     img.src = path(idx);
                 }
